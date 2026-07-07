@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🌸 消消乐 · 闯关</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body {
+            margin: 0; min-height: 100vh;
+            background: linear-gradient(145deg, #d4e9ff 0%, #b0d4f0 100%);
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            display: flex; justify-content: center; align-items: center;
+            padding: 12px; overflow: hidden;
+        }
+        .game-wrapper {
+            max-width: 520px; width: 100%;
+            background: rgba(255,255,255,0.5); backdrop-filter: blur(4px);
+            border-radius: 48px; box-shadow: 0 20px 40px rgba(80,140,200,0.25);
+            padding: 20px 16px 24px; border: 1px solid rgba(255,255,255,0.6);
+            position: relative; min-height: 450px;
+            transition: background 0.6s ease, box-shadow 0.6s ease;
+        }
+        .game-wrapper.victory {
+            background: rgba(255, 235, 200, 0.85);
+            box-shadow: 0 0 40px #ffb07c;
+            border-color: #ffc107;
+        }
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 0 4px 8px; }
+        .level-badge {
+            background: rgba(255,255,255,0.7); padding: 4px 18px; border-radius: 40px;
+            font-weight: 600; font-size: 1.2rem; color: #1a4b6d;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        .reset-btn {
+            background: white; border: none; font-size: 1.4rem; width: 42px; height: 42px;
+            border-radius: 40px; cursor: pointer; transition: 0.2s;
+            box-shadow: 0 2px 8px rgba(70,130,200,0.1); color: #1f648b;
+            border: 1px solid rgba(255,255,255,0.6);
+        }
+        .reset-btn:active { transform: scale(0.88); }
+        .status-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(230,245,255,0.7); padding: 8px 16px; border-radius: 60px;
+            margin-bottom: 12px; color: #1f5375; font-weight: 500; font-size: 0.9rem;
+            border: 1px solid rgba(255,255,255,0.5); flex-wrap: wrap; gap: 4px;
+        }
+        .status-item { display: flex; align-items: center; gap: 4px; }
+        .status-item .icon { font-size: 1rem; }
+        .status-item .value {
+            background: white; padding: 0 10px; border-radius: 30px;
+            font-weight: 600; min-width: 24px; text-align: center; color: #0e3b57;
+        }
+        .value.danger { color: #e74c3c; animation: pulse 0.6s infinite alternate; }
+        @keyframes pulse { 0% { opacity: 1; } 100% { opacity: 0.4; } }
+        .goal-bar {
+            display: flex; align-items: center; gap: 6px;
+            background: rgba(255,255,255,0.4); padding: 3px 12px 3px 8px;
+            border-radius: 40px; font-size: 0.8rem;
+        }
+        .goal-track { width: 60px; height: 5px; background: rgba(0,0,0,0.1); border-radius: 10px; overflow: hidden; }
+        .goal-fill { height: 100%; background: linear-gradient(90deg, #f472b6, #ec4899); border-radius: 10px; transition: width 0.3s ease; width: 0%; }
+        .grid-container {
+            display: grid; gap: 5px; background: rgba(190,220,245,0.3); padding: 12px;
+            border-radius: 32px; backdrop-filter: blur(2px);
+            box-shadow: inset 0 4px 12px rgba(0,30,60,0.08);
+            position: relative; margin-bottom: 8px; min-height: 200px;
+        }
+        .cell {
+            aspect-ratio: 1/1; background: rgba(255,255,255,0.75); border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; box-shadow: 0 2px 6px rgba(50,100,160,0.08), 0 0 0 1px rgba(255,255,255,0.5) inset;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+            cursor: grab; position: relative; z-index: 1;
+        }
+        .cell:active { cursor: grabbing; transform: scale(0.94); }
+        .cell.selected { box-shadow: 0 0 0 4px #8fcbff, 0 4px 12px rgba(40,120,220,0.3); transform: scale(0.94); z-index: 10; }
+        .cell.dragging { z-index: 100; opacity: 0.9; transform: scale(1.08); }
+        .cell.fake {
+            box-shadow: 0 0 0 3px #b48bdf, 0 2px 6px rgba(50,100,160,0.08); /* 饱和度降低 */
+        }
+        .cell.locked { background: rgba(200,200,200,0.6) !important; cursor: not-allowed; box-shadow: 0 0 0 2px #999 inset; opacity: 0.7; }
+        .cell.ice { position: relative; }
+        .cell.ice::after { content: '❄️'; position: absolute; font-size: 0.7rem; top: -1px; right: -1px; text-shadow: 0 0 4px rgba(100,200,255,0.6); pointer-events: none; }
+        .cell.ice::before { content: ''; position: absolute; inset: 2px; border-radius: 10px; background: rgba(100,200,255,0.2); pointer-events: none; border: 1.5px solid rgba(100,200,255,0.3); }
+        .cell.popping { animation: popOut 0.3s ease forwards; }
+        @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: 0.6; } 100% { transform: scale(0); opacity: 0; } }
+        .cell.dropping { animation: dropIn 0.35s ease-out forwards; }
+        @keyframes dropIn { 0% { transform: translateY(-50px) scale(0.8); opacity: 0; } 70% { transform: translateY(4px) scale(1.04); opacity: 1; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+        .cell.bounce-back { animation: bounceBack 0.3s ease forwards; }
+        @keyframes bounceBack { 0% { transform: translate(0, 0); } 30% { transform: translate(var(--bx), var(--by)); } 100% { transform: translate(0, 0); } }
+        .score-float { position: absolute; font-size: 1.4rem; font-weight: bold; color: #ff6b9d; pointer-events: none; z-index: 200; animation: floatUp 0.8s ease-out forwards; text-shadow: 0 2px 4px rgba(255,107,157,0.3); }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-50px) scale(1.2); opacity: 0; } }
+        .footer-tip { text-align: center; color: #2b5f7a; font-size: 0.8rem; opacity: 0.7; padding: 4px 0; }
+        .modal-overlay {
+            position: absolute; inset: 0; background: rgba(0,20,40,0.5); backdrop-filter: blur(6px);
+            border-radius: 48px; display: flex; align-items: center; justify-content: center;
+            z-index: 500; padding: 20px; animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { 0% { opacity: 0; } 100% { opacity: 1; } }
+        .modal-box {
+            background: rgba(255,255,255,0.95); backdrop-filter: blur(4px); border-radius: 40px;
+            padding: 28px 24px 24px; max-width: 380px; width: 100%; text-align: center;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.5);
+            max-height: 90vh; overflow-y: auto;
+        }
+        .modal-box h2 { margin: 0 0 4px; font-size: 1.6rem; color: #1a4b6d; }
+        .modal-box .subtitle { color: #4a7a9a; font-size: 0.9rem; margin-bottom: 12px; }
+        .modal-box .desc { text-align: left; background: rgba(200,225,245,0.3); padding: 12px 16px; border-radius: 20px; margin: 8px 0 16px; font-size: 0.9rem; line-height: 1.7; color: #1a3d55; }
+        .modal-box .desc .highlight { display: inline-block; background: rgba(168,85,247,0.15); padding: 0 8px; border-radius: 10px; color: #7c3aed; }
+        .modal-box .desc .ice-highlight { display: inline-block; background: rgba(100,200,255,0.2); padding: 0 8px; border-radius: 10px; color: #0891b2; }
+        .modal-btn { background: linear-gradient(145deg, #6fa8dc, #4a8bc2); border: none; color: white; font-size: 1.1rem; font-weight: 600; padding: 12px 36px; border-radius: 60px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 16px rgba(70,130,200,0.3); margin-top: 4px; }
+        .modal-btn:active { transform: scale(0.94); }
+        .modal-btn.success { background: linear-gradient(145deg, #6fcf97, #27ae60); }
+        .modal-btn.fail { background: linear-gradient(145deg, #f1948a, #e74c3c); }
+        .modal-btn.victory { background: linear-gradient(145deg, #f9d976, #f39c12); color: #2d1b00; }
+
+        /* 第六关胜利庆典 */
+        .victory-grid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 20px 0; }
+        .victory-trophy { font-size: 6rem; line-height: 1.2; filter: drop-shadow(0 8px 20px rgba(255, 180, 0, 0.5)); animation: floatTrophy 2s ease-in-out infinite; }
+        @keyframes floatTrophy { 0% { transform: translateY(0); } 50% { transform: translateY(-12px); } 100% { transform: translateY(0); } }
+        .victory-text { font-size: 1.4rem; font-weight: 700; color: #b45f06; background: rgba(255,215,0,0.2); padding: 8px 24px; border-radius: 60px; backdrop-filter: blur(4px); border: 2px solid #ffb300; box-shadow: 0 0 30px #ffb30066; }
+        .emoji-rain { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 600; border-radius: 48px; }
+        .emoji-rain span { position: absolute; font-size: 2rem; animation: rainFall linear forwards; opacity: 0.9; }
+        @keyframes rainFall { 0% { transform: translateY(-20px) rotate(0deg) scale(0.8); opacity: 1; } 100% { transform: translateY(calc(100vh)) rotate(720deg) scale(1.4); opacity: 0; } }
+
+        .fake-crash {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.03); backdrop-filter: blur(2px);
+            border-radius: 48px; z-index: 700; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; color: #2c3e50;
+            font-family: 'Courier New', monospace; gap: 12px;
+        }
+        .fake-crash .glitch-text { font-size: 1.5rem; letter-spacing: 2px; animation: glitch 0.2s infinite; }
+        @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-3px, 2px); } 40% { transform: translate(3px, -2px); } 60% { transform: translate(-2px, 3px); } 80% { transform: translate(2px, -3px); } 100% { transform: translate(0); } }
+        .fake-crash .scanline { width: 80%; height: 2px; background: rgba(0,0,0,0.2); animation: scan 0.8s linear infinite; }
+        @keyframes scan { 0% { transform: translateY(-60px); } 100% { transform: translateY(60px); } }
+
+        @media (max-width: 480px) {
+            .game-wrapper { padding: 12px 10px 16px; border-radius: 32px; }
+            .grid-container { gap: 4px; padding: 8px; border-radius: 24px; min-height: 150px; }
+            .cell { font-size: 1.3rem; border-radius: 10px; }
+            .status-bar { font-size: 0.75rem; padding: 4px 10px; }
+            .modal-box { padding: 20px 16px; }
+            .modal-box h2 { font-size: 1.3rem; }
+            .goal-track { width: 40px; }
+            .victory-trophy { font-size: 4rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-wrapper" id="app">
+    <div class="header">
+        <span class="level-badge" id="levelBadge">🏆 第 1 关</span>
+        <button class="reset-btn" id="resetBtn">⟳</button>
+    </div>
+    <div class="status-bar">
+        <span class="status-item"><span class="icon">⭐</span><span class="value" id="scoreDisplay">0</span></span>
+        <span class="status-item"><span class="icon">👣</span><span class="value" id="movesValue">∞</span></span>
+        <span class="status-item"><span class="icon">⏱</span><span class="value" id="timeValue">--</span></span>
+        <span class="goal-bar" id="goalBar"><span id="goalLabel">🌸 0/10</span><div class="goal-track"><div class="goal-fill" id="goalFill"></div></div></span>
+    </div>
+    <div class="grid-container" id="grid"></div>
+    <div class="footer-tip">✨ 滑动交换 · 消除目标过关</div>
+    <div id="modalContainer"></div>
+</div>
+<script>
+// ============================================================
+//  消消乐 · 闯关模式 (修复 + 彩蛋第六关)
+// ============================================================
+
+const LEVELS = [{
+    level: 1, rows: 8, cols: 8, moves: 999, time: 0, targetScore: 0,
+    targetSymbol: '🌸', targetCount: 10, fakeBlocks: 0, iceEnabled: false, iceFreezeTime: 0,
+    symbols: ['🌸','🌼','🍀','🍄','☁️','💧'],
+    desc: '🌸 消除 10 个花朵，无步数限制，练练手吧！点击右上角 ⟳ 可重开本关。'
+},{
+    level: 2, rows: 8, cols: 8, moves: 10, time: 0, targetScore: 0,
+    targetSymbol: '🌸', targetCount: 10, fakeBlocks: 0, iceEnabled: false, iceFreezeTime: 0,
+    symbols: ['🌸','🌼','🍀','🍄','☁️','💧'],
+    desc: '👣 在 10 步内消除 10 个 🌸，精准走位！右上角 ⟳ 可重来。'
+},{
+    level: 3, rows: 8, cols: 8, moves: 999, time: 30, targetScore: 500,
+    targetSymbol: null, targetCount: 0, fakeBlocks: 0, iceEnabled: false, iceFreezeTime: 0,
+    symbols: ['🌸','🌼','🍀','🍄','☁️','💧'],
+    desc: '⏱ 30 秒内达到 500 分！右上角 ⟳ 可重开。'
+},{
+    level: 4, rows: 6, cols: 6, moves: 999, time: 60, targetScore: 1000,
+    targetSymbol: null, targetCount: 0, fakeBlocks: 3, iceEnabled: false, iceFreezeTime: 0,
+    symbols: ['🌸','🌼','🍀','🍄','☁️','💧'],
+    desc: '🎭 假方块混入！点击解锁后再消除，60 秒内达到 1000 分。右上角 ⟳ 重开。'
+},{
+    level: 5, rows: 10, cols: 10, moves: 999, time: 0, targetScore: 666,
+    targetSymbol: null, targetCount: 0, fakeBlocks: 6, iceEnabled: true, iceFreezeTime: 7,
+    symbols: ['🌸','🌼','🍀','🍄','☁️','💧','🦋','🌺'],
+    desc: '❄️ 终极挑战！获得 666 分，假方块 + 冰块（7秒扩散），步数无限。右上角 ⟳ 重开。'
+}];
+
+// 假的第六关配置 (仅用于显示)
+const FAKE_LEVEL = {
+    level: 6, rows: 3, cols: 3, moves: 999, time: 0, targetScore: 0,
+    targetSymbol: '💙', targetCount: 3, fakeBlocks: 0, iceEnabled: false, iceFreezeTime: 0,
+    symbols: ['💙'],
+    desc: '✨ 收集三颗💙，解锁终极惊喜！'
+};
+
+const LOCKED_EMOJI = '❌';
+
+// DOM
+const gridEl = document.getElementById('grid');
+const scoreEl = document.getElementById('scoreDisplay');
+const movesValueEl = document.getElementById('movesValue');
+const timeValueEl = document.getElementById('timeValue');
+const levelBadgeEl = document.getElementById('levelBadge');
+const goalLabelEl = document.getElementById('goalLabel');
+const goalFillEl = document.getElementById('goalFill');
+const goalBarEl = document.getElementById('goalBar');
+const modalContainer = document.getElementById('modalContainer');
+const resetBtn = document.getElementById('resetBtn');
+const appWrapper = document.getElementById('app');
+
+let state = {};
+
+function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function posKey(r,c) { return r+','+c; }
+function isAdjacent(r1,c1,r2,c2) { return (Math.abs(r1-r2)===1 && c1===c2) || (Math.abs(c1-c2)===1 && r1===r2); }
+function isFakeBlock(s,r,c) { return s.fakeBlocks.some(f => f.row===r && f.col===c && !f.locked); }
+function isLockedBlock(s,r,c) { return s.lockedBlocks.some(l => l.row===r && l.col===c); }
+function isIceBlock(s,r,c) { return s.iceBlocks.some(i => i.row===r && i.col===c); }
+function getFakeBlock(s,r,c) { return s.fakeBlocks.find(f => f.row===r && f.col===c); }
+function getIceBlock(s,r,c) { return s.iceBlocks.find(i => i.row===r && i.col===c); }
+
+// ---------- 匹配系统 ----------
+function getMatches(grid, rows, cols) {
+    const matches = new Set();
+    for (let r=0; r<rows; r++) {
+        for (let c=0; c<cols-2; c++) {
+            const val = grid[r][c];
+            if (val==='' || val===LOCKED_EMOJI) continue;
+            let len=1; while (c+len<cols && grid[r][c+len]===val) len++;
+            if (len>=3) for (let i=0; i<len; i++) matches.add(posKey(r,c+i));
+            c += len-1;
+        }
+    }
+    for (let c=0; c<cols; c++) {
+        for (let r=0; r<rows-2; r++) {
+            const val = grid[r][c];
+            if (val==='' || val===LOCKED_EMOJI) continue;
+            let len=1; while (r+len<rows && grid[r+len][c]===val) len++;
+            if (len>=3) for (let i=0; i<len; i++) matches.add(posKey(r+i,c));
+            r += len-1;
+        }
+    }
+    return matches;
+}
+
+function applyGravity(grid, rows, cols, symbols) {
+    for (let c=0; c<cols; c++) {
+        const vals = [];
+        for (let r=rows-1; r>=0; r--) {
+            if (grid[r][c] !== LOCKED_EMOJI && grid[r][c] !== '') vals.push(grid[r][c]);
+        }
+        let idx=0;
+        for (let r=rows-1; r>=0; r--) {
+            if (grid[r][c] === LOCKED_EMOJI) continue;
+            grid[r][c] = idx < vals.length ? vals[idx++] : rand(symbols);
+        }
+    }
+}
+
+function stabilize(grid, rows, cols, symbols) {
+    let any=true;
+    while (any) {
+        any=false;
+        const matches = getMatches(grid, rows, cols);
+        if (matches.size>0) {
+            any=true;
+            for (const key of matches) {
+                const [r,c]=key.split(',').map(Number);
+                grid[r][c]='';
+            }
+            applyGravity(grid, rows, cols, symbols);
+        }
+    }
+}
+
+// ---------- 假方块 (5秒锁定, 边框饱和度降低) ----------
+function spawnFakeBlocks(s, count) {
+    let placed=0, attempts=0;
+    while (placed<count && attempts<1000) {
+        attempts++;
+        const r=Math.floor(Math.random()*s.rows), c=Math.floor(Math.random()*s.cols);
+        if (isFakeBlock(s,r,c) || isLockedBlock(s,r,c) || isIceBlock(s,r,c)) continue;
+        if (s.grid[r][c]===LOCKED_EMOJI || s.grid[r][c]==='') continue;
+        const fakeSymbol = rand(s.symbols);
+        const fake = { row:r, col:c, unlocked:false, locked:false, timerId:null, fakeSymbol, unlockSymbol:null };
+        s.grid[r][c] = fakeSymbol;
+        s.fakeBlocks.push(fake);
+        fake.timerId = setTimeout(() => {
+            if (!fake.unlocked && !fake.locked) {
+                fake.locked = true;
+                const idx = s.fakeBlocks.indexOf(fake);
+                if (idx!==-1) s.fakeBlocks.splice(idx,1);
+                s.lockedBlocks.push({ row:fake.row, col:fake.col });
+                s.grid[fake.row][fake.col] = LOCKED_EMOJI;
+                renderGrid(s);
+            }
+        }, 5000); // 5秒
+        placed++;
+    }
+}
+
+function unlockFake(s,r,c) {
+    const fake = getFakeBlock(s,r,c);
+    if (!fake || fake.unlocked || fake.locked) return;
+    fake.unlocked = true;
+    if (fake.timerId) { clearTimeout(fake.timerId); fake.timerId=null; }
+    let newSymbol = rand(s.symbols);
+    let attempts=0;
+    while (newSymbol===fake.fakeSymbol && attempts<20) { newSymbol=rand(s.symbols); attempts++; }
+    fake.unlockSymbol = newSymbol;
+    s.grid[r][c] = newSymbol;
+    const idx = s.fakeBlocks.indexOf(fake);
+    if (idx!==-1) s.fakeBlocks.splice(idx,1);
+    renderGrid(s);
+}
+
+function handleFakeSwiped(s,r,c) {
+    const fake = getFakeBlock(s,r,c);
+    if (!fake || fake.unlocked || fake.locked) return;
+    fake.locked = true;
+    if (fake.timerId) { clearTimeout(fake.timerId); fake.timerId=null; }
+    const idx = s.fakeBlocks.indexOf(fake);
+    if (idx!==-1) s.fakeBlocks.splice(idx,1);
+    s.lockedBlocks.push({ row:fake.row, col:fake.col });
+    s.grid[fake.row][fake.col] = LOCKED_EMOJI;
+    renderGrid(s);
+}
+
+function spawnFakeOnEliminate(s,r,c) {
+    const config = LEVELS[s.levelIndex];
+    if (!config || config.fakeBlocks===0) return;
+    if (Math.random()>0.25) return;
+    if (isLockedBlock(s,r,c) || isFakeBlock(s,r,c) || isIceBlock(s,r,c)) return;
+    if (s.grid[r][c]==='' || s.grid[r][c]===LOCKED_EMOJI) return;
+    const fakeSymbol = rand(s.symbols);
+    const fake = { row:r, col:c, unlocked:false, locked:false, timerId:null, fakeSymbol, unlockSymbol:null };
+    s.grid[r][c] = fakeSymbol;
+    s.fakeBlocks.push(fake);
+    fake.timerId = setTimeout(() => {
+        if (!fake.unlocked && !fake.locked) {
+            fake.locked = true;
+            const idx = s.fakeBlocks.indexOf(fake);
+            if (idx!==-1) s.fakeBlocks.splice(idx,1);
+            s.lockedBlocks.push({ row:fake.row, col:fake.col });
+            s.grid[fake.row][fake.col] = LOCKED_EMOJI;
+            renderGrid(s);
+        }
+    }, 5000);
+}
+
+// ---------- 冰块 (7秒扩散) ----------
+function spawnIce(s,r,c) {
+    if (isLockedBlock(s,r,c) || isFakeBlock(s,r,c) || isIceBlock(s,r,c)) return;
+    if (s.grid[r][c]==='' || s.grid[r][c]===LOCKED_EMOJI) return;
+    const config = LEVELS[s.levelIndex];
+    const freezeTime = (config && config.iceFreezeTime) ? config.iceFreezeTime : 7;
+    const ice = { row:r, col:c, timerId:null };
+    s.iceBlocks.push(ice);
+    ice.timerId = setTimeout(() => { freezeNeighbor(s, ice); }, freezeTime * 1000);
+    renderGrid(s);
+}
+
+function meltIce(s,r,c) {
+    const ice = getIceBlock(s,r,c);
+    if (!ice) return;
+    if (ice.timerId) { clearTimeout(ice.timerId); ice.timerId=null; }
+    const idx = s.iceBlocks.indexOf(ice);
+    if (idx!==-1) s.iceBlocks.splice(idx,1);
+    renderGrid(s);
+}
+
+function freezeNeighbor(s, ice) {
+    const still = s.iceBlocks.some(i => i.row===ice.row && i.col===ice.col && i.timerId!==null);
+    if (!still) return;
+    const neighbors = [[-1,0],[1,0],[0,-1],[0,1]];
+    const candidates = [];
+    for (const [dr,dc] of neighbors) {
+        const nr=ice.row+dr, nc=ice.col+dc;
+        if (nr<0||nr>=s.rows||nc<0||nc>=s.cols) continue;
+        if (isLockedBlock(s,nr,nc) || isFakeBlock(s,nr,nc) || isIceBlock(s,nr,nc)) continue;
+        if (s.grid[nr][nc]==='' || s.grid[nr][nc]===LOCKED_EMOJI) continue;
+        candidates.push([nr,nc]);
+    }
+    if (candidates.length===0) {
+        const ref = getIceBlock(s, ice.row, ice.col);
+        if (ref && ref.timerId===null) {
+            const config = LEVELS[s.levelIndex];
+            const freezeTime = (config && config.iceFreezeTime) ? config.iceFreezeTime : 7;
+            ref.timerId = setTimeout(() => freezeNeighbor(s, ref), freezeTime*1000);
+        }
+        return;
+    }
+    const [fr,fc] = candidates[Math.floor(Math.random()*candidates.length)];
+    spawnIce(s, fr, fc);
+    const ref = getIceBlock(s, ice.row, ice.col);
+    if (ref && ref.timerId===null) {
+        const config = LEVELS[s.levelIndex];
+        const freezeTime = (config && config.iceFreezeTime) ? config.iceFreezeTime : 7;
+        ref.timerId = setTimeout(() => freezeNeighbor(s, ref), freezeTime*1000);
+    }
+}
+
+function spawnIceOnEliminate(s,r,c) {
+    const config = LEVELS[s.levelIndex];
+    if (!config || !config.iceEnabled) return;
+    if (s.grid[r][c]==='' || s.grid[r][c]===LOCKED_EMOJI) return;
+    if (isLockedBlock(s,r,c) || isFakeBlock(s,r,c) || isIceBlock(s,r,c)) return;
+    if (Math.random()>0.2) return;
+    spawnIce(s,r,c);
+}
+
+// ---------- 交换 ----------
+async function trySwap(r1,c1,r2,c2) {
+    if (state.isProcessing) return false;
+    if (state.isLevelComplete || state.isLevelFailed) return false;
+    if (!isAdjacent(r1,c1,r2,c2)) return false;
+    if (isLockedBlock(state,r1,c1) || isLockedBlock(state,r2,c2)) return false;
+    if (isIceBlock(state,r1,c1) || isIceBlock(state,r2,c2)) return false;
+
+    if (isFakeBlock(state,r1,c1)) { const f=getFakeBlock(state,r1,c1); if (f && !f.unlocked) { handleFakeSwiped(state,r1,c1); return false; } }
+    if (isFakeBlock(state,r2,c2)) { const f=getFakeBlock(state,r2,c2); if (f && !f.unlocked) { handleFakeSwiped(state,r2,c2); return false; } }
+
+    const temp = state.grid[r1][c1];
+    state.grid[r1][c1] = state.grid[r2][c2];
+    state.grid[r2][c2] = temp;
+
+    const matches = getMatches(state.grid, state.rows, state.cols);
+    if (matches.size===0) {
+        const t = state.grid[r1][c1];
+        state.grid[r1][c1] = state.grid[r2][c2];
+        state.grid[r2][c2] = t;
+        const cells = gridEl.querySelectorAll('.cell');
+        const c1el = cells[r1*state.cols+c1], c2el = cells[r2*state.cols+c2];
+        if (c1el && c2el) {
+            const dx=(c2-c1)*100, dy=(r2-r1)*100;
+            c1el.style.setProperty('--bx', dx*0.3+'%'); c1el.style.setProperty('--by', dy*0.3+'%'); c1el.classList.add('bounce-back');
+            c2el.style.setProperty('--bx', -dx*0.3+'%'); c2el.style.setProperty('--by', -dy*0.3+'%'); c2el.classList.add('bounce-back');
+            setTimeout(() => { c1el.classList.remove('bounce-back'); c2el.classList.remove('bounce-back'); }, 300);
+        }
+        return false;
+    }
+
+    if (state.movesLeft!==999) { state.movesLeft--; updateUI(); }
+
+    state.isProcessing = true;
+    renderGrid(state);
+    await sleep(120);
+
+    while (true) {
+        const matches2 = getMatches(state.grid, state.rows, state.cols);
+        if (matches2.size===0) break;
+        const positions = [];
+        for (const key of matches2) { const [r,c]=key.split(',').map(Number); positions.push([r,c]); }
+
+        const cells = gridEl.querySelectorAll('.cell');
+        for (const key of matches2) { const [r,c]=key.split(',').map(Number); const el = cells[r*state.cols+c]; if (el) el.classList.add('popping'); }
+        await sleep(280);
+
+        let pts=0, collected=0;
+        const elimSymbols = [];
+        for (const key of matches2) {
+            const [r,c]=key.split(',').map(Number);
+            const val = state.grid[r][c];
+            if (val && val!==LOCKED_EMOJI) {
+                elimSymbols.push(val);
+                if (state.targetSymbol && val===state.targetSymbol) collected++;
+            }
+            pts += 10;
+            state.grid[r][c] = '';
+            const ii = state.iceBlocks.findIndex(i => i.row===r && i.col===c);
+            if (ii!==-1) { clearTimeout(state.iceBlocks[ii].timerId); state.iceBlocks.splice(ii,1); }
+            const fi = state.fakeBlocks.findIndex(f => f.row===r && f.col===c);
+            if (fi!==-1) { clearTimeout(state.fakeBlocks[fi].timerId); state.fakeBlocks.splice(fi,1); }
+        }
+        state.score += pts;
+        state.collectedCount += collected;
+        updateUI();
+        showScoreFloat(pts);
+
+        applyGravity(state.grid, state.rows, state.cols, state.symbols);
+        renderGrid(state);
+        await sleep(350);
+
+        if (LEVELS[state.levelIndex]?.iceEnabled) {
+            for (const [r,c] of positions) {
+                if (state.grid[r][c] && state.grid[r][c]!==LOCKED_EMOJI) {
+                    if (!isLockedBlock(state,r,c) && !isFakeBlock(state,r,c) && !isIceBlock(state,r,c)) {
+                        const isFlower = elimSymbols.some(s => s==='🌸');
+                        if (Math.random() < (isFlower ? 0.4 : 0.15)) spawnIce(state,r,c);
+                    }
+                }
+            }
+            renderGrid(state);
+        }
+        if (LEVELS[state.levelIndex]?.fakeBlocks > 0) {
+            for (const [r,c] of positions) {
+                if (state.grid[r][c] && state.grid[r][c]!==LOCKED_EMOJI) {
+                    if (!isLockedBlock(state,r,c) && !isFakeBlock(state,r,c) && !isIceBlock(state,r,c)) {
+                        if (Math.random() < 0.2) spawnFakeOnEliminate(state,r,c);
+                    }
+                }
+            }
+            renderGrid(state);
+        }
+        await sleep(100);
+    }
+    state.isProcessing = false;
+    checkStatus();
+    renderGrid(state);
+    return true;
+}
+
+// ---------- 状态检查 ----------
+function checkStatus() {
+    const config = LEVELS[state.levelIndex];
+    if (!config) return;
+    let complete = false;
+    if (config.targetSymbol && config.targetCount>0 && state.collectedCount>=config.targetCount) complete = true;
+    if (config.targetScore>0 && state.score>=config.targetScore) complete = true;
+
+    let failed = false;
+    if (state.movesLeft<=0 && state.movesLeft!==999 && !complete) failed = true;
+    if (state.timeLeft<=0 && state.timeLeft!==0 && !complete) failed = true;
+    if (complete) failed = false;
+
+    if (complete && !failed) {
+        state.isLevelComplete = true;
+        if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval=null; }
+        setTimeout(() => showComplete(), 400);
+    } else if (failed) {
+        state.isLevelFailed = true;
+        if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval=null; }
+        setTimeout(() => showFailed(), 400);
+    }
+}
+
+// ---------- 计时器 ----------
+function startTimer() {
+    if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval=null; }
+    if (state.timeLeft<=0) return;
+    state.timerInterval = setInterval(() => {
+        state.timeLeft--;
+        updateUI();
+        if (state.timeLeft<=0) {
+            clearInterval(state.timerInterval); state.timerInterval=null;
+            checkStatus();
+        }
+    }, 1000);
+}
+
+// ---------- UI ----------
+function updateUI() {
+    const config = LEVELS[state.levelIndex];
+    scoreEl.textContent = state.score;
+    if (state.movesLeft>=999) { movesValueEl.textContent='∞'; movesValueEl.classList.remove('danger'); }
+    else { movesValueEl.textContent=state.movesLeft; movesValueEl.classList.toggle('danger', state.movesLeft<=3); }
+    if (state.timeLeft<=0) { timeValueEl.textContent='--'; timeValueEl.classList.remove('danger'); }
+    else { timeValueEl.textContent=state.timeLeft+'s'; timeValueEl.classList.toggle('danger', state.timeLeft<=5); }
+    levelBadgeEl.textContent = config ? '🏆 第 '+config.level+' 关' : '🏆 第 ? 关';
+    if (config && config.targetSymbol && config.targetCount>0) {
+        goalLabelEl.textContent = config.targetSymbol+' '+state.collectedCount+'/'+config.targetCount;
+        goalFillEl.style.width = Math.min(100, (state.collectedCount/config.targetCount)*100)+'%';
+        goalBarEl.style.display = 'flex';
+    } else if (config && config.targetScore>0) {
+        goalLabelEl.textContent = '⭐ '+state.score+'/'+config.targetScore;
+        goalFillEl.style.width = Math.min(100, (state.score/config.targetScore)*100)+'%';
+        goalBarEl.style.display = 'flex';
+    } else { goalBarEl.style.display = 'none'; }
+}
+
+function showScoreFloat(pts) {
+    const el = document.createElement('div');
+    el.className = 'score-float';
+    el.textContent = '+' + pts;
+    const rect = scoreEl.getBoundingClientRect();
+    const wr = document.querySelector('.game-wrapper').getBoundingClientRect();
+    el.style.left = (rect.left - wr.left + rect.width/2 - 20)+'px';
+    el.style.top = (rect.top - wr.top)+'px';
+    document.querySelector('.game-wrapper').appendChild(el);
+    setTimeout(() => el.remove(), 800);
+}
+
+// ---------- 渲染 ----------
+function renderGrid(s) {
+    const { rows, cols, grid } = s;
+    gridEl.style.gridTemplateColumns = 'repeat('+cols+', 1fr)';
+    gridEl.innerHTML = '';
+    for (let r=0; r<rows; r++) {
+        for (let c=0; c<cols; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.dataset.row = r; cell.dataset.col = c;
+            const val = grid[r][c] || ' ';
+            cell.textContent = val;
+            if (isFakeBlock(s,r,c)) cell.classList.add('fake');
+            if (isLockedBlock(s,r,c)) cell.classList.add('locked');
+            if (isIceBlock(s,r,c)) cell.classList.add('ice');
+            gridEl.appendChild(cell);
+        }
+    }
+}
+
+// ---------- 弹窗 ----------
+function showIntro(config) {
+    modalContainer.innerHTML = '';
+    let special = '';
+    if (config.fakeBlocks>0 && config.iceEnabled) {
+        special = '<span class="highlight">🎭 假方块</span>：点击后变成真方块，5秒未点则锁定 ❌<br><span class="ice-highlight">❄️ 冰块</span>：相邻消除可融化，7秒未消会冻结邻居！';
+    } else if (config.fakeBlocks>0) {
+        special = '<span class="highlight">🎭 假方块</span>：点击后变成真方块，5秒未点则锁定 ❌';
+    } else if (config.iceEnabled) {
+        special = '<span class="ice-highlight">❄️ 冰块</span>：相邻消除可融化，7秒未消会冻结邻居！';
+    }
+    let task = '';
+    if (config.targetSymbol && config.targetCount>0) task = '消除 '+config.targetCount+' 个 '+config.targetSymbol;
+    else if (config.targetScore>0) task = '达到 '+config.targetScore+' 分';
+    let limit = '';
+    if (config.moves<999 && config.time>0) limit = config.moves+' 步 · '+config.time+' 秒';
+    else if (config.moves<999) limit = config.moves+' 步';
+    else if (config.time>0) limit = config.time+' 秒';
+    else limit = '无限制';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'introModal';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <h2>🌸 第 ${config.level} 关</h2>
+            <div class="subtitle">${task}</div>
+            <div class="desc">
+                <strong>📋 任务：</strong>${task}<br>
+                <strong>⏱ 限制：</strong>${limit}
+                ${special ? '<br><br><strong>⚡ 特殊机制：</strong><br>'+special : ''}
+                <br><br><span style="font-size:0.85rem;color:#666;">${config.desc || ''}</span>
+            </div>
+            <button class="modal-btn" id="startLevelBtn">🚀 开始挑战</button>
+        </div>
+    `;
+    modalContainer.appendChild(overlay);
+    state.showingIntro = true;
+    document.getElementById('startLevelBtn').addEventListener('click', function() {
+        overlay.remove();
+        state.showingIntro = false;
+        if (state.timeLeft>0) startTimer();
+    });
+}
+
+function showComplete() {
+    modalContainer.innerHTML = '';
+    const last = state.levelIndex >= LEVELS.length-1;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <h2>🎉 过关啦！</h2>
+            <div class="subtitle">⭐ 得分：${state.score}</div>
+            <div class="desc" style="text-align:center;font-size:1.1rem;">
+                ${last ? '🏆 恭喜通关所有关卡！' : '准备挑战下一关吧！'}
+            </div>
+            <button class="modal-btn success" id="nextBtn">${last ? '🏆 进入最终挑战' : '➡️ 下一关'}</button>
+        </div>
+    `;
+    modalContainer.appendChild(overlay);
+    document.getElementById('nextBtn').addEventListener('click', function() {
+        overlay.remove();
+        if (last) {
+            // 加载假的第六关
+            loadFakeLevel6();
+        } else {
+            loadLevel(state.levelIndex+1);
+        }
+    });
+}
+
+function showFailed() {
+    modalContainer.innerHTML = '';
+    let reason = '';
+    if (state.movesLeft<=0 && state.movesLeft!==999) reason = '👣 步数用完了';
+    if (state.timeLeft<=0 && state.timeLeft!==0) reason = '⏱ 时间到了';
+    if (!reason) reason = '再试一次吧！';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <h2>😅 再试一次</h2>
+            <div class="subtitle">⭐ 得分：${state.score}</div>
+            <div class="desc" style="text-align:center;">${reason}<br>别灰心，再挑战一次吧！</div>
+            <button class="modal-btn fail" id="retryBtn">🔄 重试本关</button>
+        </div>
+    `;
+    modalContainer.appendChild(overlay);
+    document.getElementById('retryBtn').addEventListener('click', function() {
+        overlay.remove();
+        loadLevel(state.levelIndex);
+    });
+}
+
+// ---------- 加载关卡 ----------
+function loadLevel(index) {
+    const config = LEVELS[index];
+    if (!config) return;
+    if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval=null; }
+    for (const f of state.fakeBlocks||[]) { if (f.timerId) clearTimeout(f.timerId); }
+    for (const i of state.iceBlocks||[]) { if (i.timerId) clearTimeout(i.timerId); }
+    state = {
+        levelIndex: index, rows: config.rows, cols: config.cols, grid: [],
+        score: 0, movesLeft: config.moves, timeLeft: config.time,
+        targetSymbol: config.targetSymbol, targetCount: config.targetCount, collectedCount: 0,
+        isProcessing: false, isLevelComplete: false, isLevelFailed: false,
+        timerInterval: null, fakeBlocks: [], iceBlocks: [], lockedBlocks: [],
+        isDragging: false, dragStartRow: -1, dragStartCol: -1, dragCurrentRow: -1, dragCurrentCol: -1,
+        symbols: config.symbols.slice(), showingIntro: false
+    };
+    const grid = [];
+    for (let r=0; r<state.rows; r++) {
+        grid[r]=[];
+        for (let c=0; c<state.cols; c++) grid[r][c]=rand(state.symbols);
+    }
+    stabilize(grid, state.rows, state.cols, state.symbols);
+    state.grid = grid;
+    if (config.fakeBlocks>0) spawnFakeBlocks(state, config.fakeBlocks);
+    appWrapper.classList.remove('victory');
+    updateUI();
+    renderGrid(state);
+    showIntro(config);
+}
+
+// ---------- 假的第六关 + 胜利庆典 ----------
+function loadFakeLevel6() {
+    // 清除所有状态
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    for (const f of state.fakeBlocks||[]) if (f.timerId) clearTimeout(f.timerId);
+    for (const i of state.iceBlocks||[]) if (i.timerId) clearTimeout(i.timerId);
+    const config = FAKE_LEVEL;
+    state = {
+        levelIndex: 5, // 伪装
+        rows: config.rows, cols: config.cols, grid: [],
+        score: 0, movesLeft: config.moves, timeLeft: config.time,
+        targetSymbol: config.targetSymbol, targetCount: config.targetCount, collectedCount: 0,
+        isProcessing: false, isLevelComplete: false, isLevelFailed: false,
+        timerInterval: null, fakeBlocks: [], iceBlocks: [], lockedBlocks: [],
+        isDragging: false, dragStartRow: -1, dragStartCol: -1, dragCurrentRow: -1, dragCurrentCol: -1,
+        symbols: ['💙'], showingIntro: false
+    };
+    // 固定三个 💙 位置 (不连在一起)
+    const fixed = [[0,0], [1,2], [2,1]];
+    const grid = [];
+    for (let r=0; r<3; r++) {
+        grid[r]=[];
+        for (let c=0; c<3; c++) grid[r][c]=' ';
+    }
+    for (const [r,c] of fixed) grid[r][c]='💙';
+    state.grid = grid;
+    state.targetSymbol = '💙';
+    state.targetCount = 3;
+    state.collectedCount = 0;
+    appWrapper.classList.remove('victory');
+    updateUI();
+    renderGrid(state);
+    // 直接显示开始（无intro）
+    modalContainer.innerHTML = '';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box">
+            <h2>💎 最终关</h2>
+            <div class="subtitle">收集三颗 💙 解锁终极惊喜！</div>
+            <div class="desc">✨ 滑动消除三颗 💙，胜利就在眼前！</div>
+            <button class="modal-btn" id="startFakeBtn">🚀 开始</button>
+        </div>
+    `;
+    modalContainer.appendChild(overlay);
+    document.getElementById('startFakeBtn').addEventListener('click', function() {
+        overlay.remove();
+        state.showingIntro = false;
+        // 开始检测
+        checkFakeLevelStatus();
+    });
+}
+
+function checkFakeLevelStatus() {
+    // 检测三颗💙是否被消除
+    const interval = setInterval(() => {
+        if (state.isLevelComplete) { clearInterval(interval); return; }
+        const count = state.grid.flat().filter(v => v==='💙').length;
+        const collected = 3 - count;
+        state.collectedCount = collected;
+        updateUI();
+        if (collected >= 3) {
+            state.isLevelComplete = true;
+            clearInterval(interval);
+            triggerVictory();
+        }
+    }, 300);
+}
+
+// ---------- 胜利庆典 (华丽) ----------
+function triggerVictory() {
+    // 清空网格，显示奖杯
+    const grid = state.grid;
+    for (let r=0; r<grid.length; r++) for (let c=0; c<grid[0].length; c++) grid[r][c]=' ';
+    renderGrid(state);
+    appWrapper.classList.add('victory');
+
+    // 显示奖杯和文字
+    const container = document.getElementById('grid');
+    container.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; grid-column:1/-1; grid-row:1/-1; gap:12px; padding:20px; background: rgba(255,235,200,0.3); border-radius:32px;">
+            <div class="victory-text">🎉 恭喜你成为全球第一个通关的用户！</div>
+            <div class="victory-trophy">🏆</div>
+            <div style="font-size:1.2rem; color:#7d5d3a; background:rgba(255,255,240,0.5); padding:6px 20px; border-radius:40px;">✨ 传奇成就 ✨</div>
+        </div>
+    `;
+    // 五彩纸屑雨
+    const emojis = ['🎉','🎊','✨','🌟','🎈','🎁','💖','🌈','⭐','🎀','🌸','🌺','🍭','🧁','🎵','💫'];
+    const rainContainer = document.createElement('div');
+    rainContainer.className = 'emoji-rain';
+    appWrapper.appendChild(rainContainer);
+    for (let i=0; i<60; i++) {
+        const span = document.createElement('span');
+        span.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+        span.style.left = Math.random()*100+'%';
+        span.style.fontSize = (1.2 + Math.random()*2.2)+'rem';
+        span.style.animationDuration = (2.5 + Math.random()*3)+'s';
+        span.style.animationDelay = (Math.random()*1.5)+'s';
+        rainContainer.appendChild(span);
+    }
+    // 移除modal
+    modalContainer.innerHTML = '';
+}
+
+// ---------- 事件 ----------
+function getCellFromPoint(x,y) {
+    const cells = gridEl.querySelectorAll('.cell');
+    for (const cell of cells) {
+        const rect = cell.getBoundingClientRect();
+        if (x>=rect.left && x<=rect.right && y>=rect.top && y<=rect.bottom) {
+            return { row: parseInt(cell.dataset.row), col: parseInt(cell.dataset.col), cell };
+        }
+    }
+    return null;
+}
+
+function handleStart(e) {
+    if (state.isProcessing || state.isLevelComplete || state.isLevelFailed || state.showingIntro) return;
+    const p = e.touches ? e.touches[0] : e;
+    const res = getCellFromPoint(p.clientX, p.clientY);
+    if (!res) return;
+    if (isLockedBlock(state,res.row,res.col) || isIceBlock(state,res.row,res.col)) return;
+    state.isDragging = true;
+    state.dragStartRow = res.row; state.dragStartCol = res.col;
+    state.dragCurrentRow = res.row; state.dragCurrentCol = res.col;
+    res.cell.classList.add('selected');
+}
+
+function handleMove(e) {
+    if (!state.isDragging || state.isProcessing) return;
+    e.preventDefault();
+    const p = e.touches ? e.touches[0] : e;
+    const res = getCellFromPoint(p.clientX, p.clientY);
+    if (!res) return;
+    state.dragCurrentRow = res.row; state.dragCurrentCol = res.col;
+    gridEl.querySelectorAll('.cell').forEach(c => c.classList.remove('dragging'));
+    res.cell.classList.add('dragging');
+}
+
+async function handleEnd(e) {
+    if (!state.isDragging) return;
+    state.isDragging = false;
+    gridEl.querySelectorAll('.cell').forEach(c => { c.classList.remove('selected'); c.classList.remove('dragging'); });
+    if (state.dragStartRow!==-1 && state.dragStartCol!==-1) {
+        if (state.dragCurrentRow!==state.dragStartRow || state.dragCurrentCol!==state.dragStartCol) {
+            await trySwap(state.dragStartRow, state.dragStartCol, state.dragCurrentRow, state.dragCurrentCol);
+        }
+    }
+    state.dragStartRow=-1; state.dragStartCol=-1; state.dragCurrentRow=-1; state.dragCurrentCol=-1;
+}
+
+function setupEvents() {
+    gridEl.addEventListener('mousedown', handleStart);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    gridEl.addEventListener('touchstart', handleStart, { passive: false });
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+    resetBtn.addEventListener('click', function() {
+        if (state.showingIntro) return;
+        if (state.isProcessing) return;
+        modalContainer.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+        // 如果当前是第六关胜利状态，重置到第五关
+        if (appWrapper.classList.contains('victory')) {
+            appWrapper.classList.remove('victory');
+            const rain = appWrapper.querySelector('.emoji-rain');
+            if (rain) rain.remove();
+            loadLevel(4);
+            return;
+        }
+        loadLevel(state.levelIndex);
+    });
+    gridEl.addEventListener('click', function(e) {
+        const cell = e.target.closest('.cell');
+        if (!cell) return;
+        const r=parseInt(cell.dataset.row), c=parseInt(cell.dataset.col);
+        if (isNaN(r)||isNaN(c)) return;
+        if (state.isProcessing || state.isLevelComplete || state.isLevelFailed || state.showingIntro) return;
+        if (isFakeBlock(state,r,c)) {
+            const f = getFakeBlock(state,r,c);
+            if (f && !f.unlocked && !f.locked) unlockFake(state,r,c);
+        }
+    });
+}
+
+// ---------- 启动 ----------
+function init() {
+    setupEvents();
+    loadLevel(0);
+}
+init();
+console.log('🌸 消消乐 · 闯关模式 (含第六关彩蛋)');
+</script>
+</body>
+</html>
