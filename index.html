@@ -739,7 +739,6 @@ function loadLevel(index) {
     symbols: config.symbols.slice(),
     showingIntro: false,
 };
-    };
     const grid = [];
     for (let r=0; r<state.rows; r++) {
         grid[r]=[];
@@ -946,6 +945,16 @@ function init() {
 }
 init();
 console.log('🌸 消消乐 · 闯关模式 (含第六关彩蛋)');
+    // ---------- 控制台指令 ----------
+function jumpToLevel6() {
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    modalContainer.querySelectorAll('.modal-overlay').forEach(m => m.remove());
+    appWrapper.classList.remove('victory');
+    const rain = appWrapper.querySelector('.emoji-rain');
+    if (rain) rain.remove();
+    loadFakeLevel6();
+}
+window.jumpToLevel6 = jumpToLevel6;
 </script>
 </body>
 </html>
