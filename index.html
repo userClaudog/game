@@ -359,12 +359,12 @@ function spawnFakeOnEliminate(s,r,c) {
     }, 5000);
 }
 
-// ---------- 冰块 (7秒扩散) ----------
+// ---------- 冰块 (6秒扩散) ----------
 function spawnIce(s,r,c) {
     if (isLockedBlock(s,r,c) || isFakeBlock(s,r,c) || isIceBlock(s,r,c)) return;
     if (s.grid[r][c]==='' || s.grid[r][c]===LOCKED_EMOJI) return;
     const config = LEVELS[s.levelIndex];
-    const freezeTime = (config && config.iceFreezeTime) ? config.iceFreezeTime : 7;
+    const freezeTime = (config && config.iceFreezeTime) ? config.iceFreezeTime : 6;
     const ice = { row:r, col:c, timerId:null };
     s.iceBlocks.push(ice);
     ice.timerId = setTimeout(() => { freezeNeighbor(s, ice); }, freezeTime * 1000);
