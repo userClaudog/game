@@ -530,8 +530,8 @@ function checkStatus() {
     if (config.targetScore>0 && state.score>=config.targetScore) complete = true;
 
     let failed = false;
-    if (state.movesLeft<=0 && state.movesLeft!==999 && !complete) failed = true;
-    if (state.timeLeft<=0 && state.timeLeft!==0 && !complete) failed = true;
+    if (state.movesLeft <= 0 && state.movesLeft !== 999 && !complete) failed = true;
+    if (state.timeLeft <= 0 && state.totalTime > 0 && !complete) failed = true;  // <-- 改成这样
     if (complete) failed = false;
 
     if (complete && !failed) {
@@ -544,7 +544,6 @@ function checkStatus() {
         setTimeout(() => showFailed(), 400);
     }
 }
-
 // ---------- 计时器 ----------
 function startTimer() {
     if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval=null; }
@@ -714,13 +713,32 @@ function loadLevel(index) {
     for (const f of state.fakeBlocks||[]) { if (f.timerId) clearTimeout(f.timerId); }
     for (const i of state.iceBlocks||[]) { if (i.timerId) clearTimeout(i.timerId); }
     state = {
-        levelIndex: index, rows: config.rows, cols: config.cols, grid: [],
-        score: 0, movesLeft: config.moves, timeLeft: config.time,
-        targetSymbol: config.targetSymbol, targetCount: config.targetCount, collectedCount: 0,
-        isProcessing: false, isLevelComplete: false, isLevelFailed: false,
-        timerInterval: null, fakeBlocks: [], iceBlocks: [], lockedBlocks: [],
-        isDragging: false, dragStartRow: -1, dragStartCol: -1, dragCurrentRow: -1, dragCurrentCol: -1,
-        symbols: config.symbols.slice(), showingIntro: false
+    levelIndex: index,
+    rows: config.rows,
+    cols: config.cols,
+    grid: [],
+    score: 0,
+    movesLeft: config.moves,
+    timeLeft: config.time,
+    totalTime: config.time,   // <-- 新增这一行
+    targetSymbol: config.targetSymbol,
+    targetCount: config.targetCount,
+    collectedCount: 0,
+    isProcessing: false,
+    isLevelComplete: false,
+    isLevelFailed: false,
+    timerInterval: null,
+    fakeBlocks: [],
+    iceBlocks: [],
+    lockedBlocks: [],
+    isDragging: false,
+    dragStartRow: -1,
+    dragStartCol: -1,
+    dragCurrentRow: -1,
+    dragCurrentCol: -1,
+    symbols: config.symbols.slice(),
+    showingIntro: false,
+};
     };
     const grid = [];
     for (let r=0; r<state.rows; r++) {
